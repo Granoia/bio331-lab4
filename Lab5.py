@@ -12,12 +12,128 @@ def main(edgefile,motif_type,numrandgraphs,numrewires,username,password):
     
     ## WRITE YOUR FUNCTION CALLS HERE
 
+    node_ls, edge_ls = read_edges(edgefile)
+    adj_ls = make_adj_ls(node_ls,edge_ls)
+    initial_counts, big_counts = do_everything(edge_ls, adj_ls, numrandgraphs, numrewires)
+    ps = compute_p(initial_counts, big_counts)
+    
     ## (you can comment out the line below while developing your methods)
-    post_graph(nodes,edges,motif_type,username,password)
+    for k in ps:
+        post_graph(node_ls,edge_ls,motif_type,username,password,ps[k])
 
     return ## done with main function
 
 ## WRITE YOUR FUNCTION DEFINITIONS HERE
+
+def make_adj_ls(nodes, edges):
+    d = {}
+    for n in nodes:
+        d[n] = []
+
+    for e in edges:
+        d[e[0]].append(e[1])
+
+    return d
+
+
+
+def find_motifs(adj_ls):
+    auto = set()
+    FFL = set()
+    FBL = set()
+
+    #find all the autoregulatory motifs
+    for n in adj_ls:
+        if n in adj_ls[n]:
+            auto.add(n)
+
+
+    #now find the Feed Forward Loop and Feedback Loop motifs
+    for n in adj_ls:
+        for neighbor in adj_ls[n]:
+            if not(n in adj_ls[neighbor]):
+                for n2 in adj_ls[neighbor]:
+                    if not(neighbor in adj_ls[n]):
+                        if n in adj_ls[n2] and not (n2 in adj_ls[n]):
+                            FBL.add(frozenset([n,neighbor,n2]))
+
+                        elif n2 in adj_ls[n] and not (n in adj_ls[n2]):
+                            FFL.add(frozenset([n,neighbor,n2]))
+
+    counts = {}
+    counts["SELF"] = len(auto)
+    counts["FFL"] = len(FFL)
+    counts["FBL"] = len(FBL)
+    
+    return counts
+
+
+def scramble_graph(edge_ls, adj_ls, numrewires):
+    i = 0
+    while i < numrewires:
+        e1 = random.choice(edge_ls)
+        e2 = random.choice(edge_ls)
+
+        if (e1[1] in adj_ls[e2[0]]) or (e2[1] in adj_ls[e1[0]]):
+            pass
+        else:
+            rewire(e1,e2,edge_ls, adj_ls)
+            i += 1
+
+    return edge_ls, adj_ls
+
+def rewire(e1,e2,edge_ls,adj_ls):
+    new1 = (e1[0],e2[1])
+    new2 = (e2[0],e1[1])
+
+    edge_ls.remove(e1)
+    edge_ls.remove(e2)
+    edge_ls.append(new1)
+    edge_ls.append(new2)
+
+    adj_ls[e1[0]].remove(e1[1])
+    adj_ls[e2[0]].remove(e2[1])
+    adj_ls[e1[0]].append(e2[1])
+    adj_ls[e2[0]].append(e1[1])
+
+
+
+def do_everything(edge_ls, adj_ls, numrandgraphs, numrewires):
+    initial_counts = find_motifs(adj_ls)
+    initial_graph = (edge_ls.copy(), adj_ls.deepcopy())
+    big_counts = {}
+    big_counts["SELF"] = []
+    big_counts["FFL"] = []
+    big_counts["FBL"] = []
+
+    for i in range(numrandgraphs):
+        new_graph = initial_graph.deepcopy()
+        scramble_graph(newgraph[0],newgraph[1],numrewires)
+        counts = count_motifs(new_graph)
+        for k,v in counts.items():
+            big_counts[k].append(v)
+
+    return initial_counts, big_counts
+        
+
+def compute_p(initial_counts, big_counts):
+    ps = {}
+    ps["SELF"] = 1.0
+    ps["FFL"] = 1.0
+    ps["FBL"] = 1.0
+    for k in ps:
+        num_k_motifs = initial_counts[k]
+        i = 0  #counts number of times the randomized graph has num_motifs >= initial graph num_motifs
+        for c in big_counts[k]:
+            if c >= num_k_motifs:
+                i += 1
+        k_motifs_p = i/float(len(big_counts[k]))
+        ps[k] = k_motifs_p
+
+    return ps
+        
+            
+
 
 ############## Functions written by Anna
 
@@ -29,12 +145,15 @@ def read_edges(infile):
     edges = []
     with open(infile) as fin:
         for line in fin:
-            row = line.strip().split(';')
+            row = line.strip('\n').split('\t')
             nodes.add(row[0])
             nodes.add(row[1])
             edges.append((row[0],row[1]))
     print(len(nodes),'nodes and',len(edges),'edges')
     return nodes,edges
+
+
+
 
 def rgb_to_hex(red,green,blue):
     """
@@ -42,13 +161,13 @@ def rgb_to_hex(red,green,blue):
     """
     return '#{:02x}{:02x}{:02x}'.format(int(red*255),int(green*255),int(blue*255))
 
-def post_graph(nodes,edges,graphid,username,password):
+def post_graph(nodes,edges,graphid,username,password,d="Lab 5"):
     """
     Gets attributes of graph and posts it to GS.
     """
     nodeAttrs,edgeAttrs = getAttributes(nodes,edges)
     data = json_utils.make_json_data(nodes,edges,nodeAttrs,edgeAttrs, \
-        title="Lab5 "+graphid,description="Lab5",tags=['Lab5'])
+        title="Lab5 "+graphid,description=d,tags=['Lab5'])
     json_utils.write_json(data,graphid+'.json')
     graphspace_utils.postGraph(graphid,graphid+'.json',username,password)
     return
