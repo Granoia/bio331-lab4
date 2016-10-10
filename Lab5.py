@@ -5,6 +5,7 @@ from optparse import OptionParser
 import itertools
 import random
 import sys
+import copy
 
 
 def main(edgefile,motif_type,numrandgraphs,numrewires,username,password):
@@ -16,10 +17,12 @@ def main(edgefile,motif_type,numrandgraphs,numrewires,username,password):
     adj_ls = make_adj_ls(node_ls,edge_ls)
     initial_counts, big_counts = do_everything(edge_ls, adj_ls, numrandgraphs, numrewires)
     ps = compute_p(initial_counts, big_counts)
+    print(ps)
+    #post_graph(node_ls,edge_ls,'test',username,password,'desc')
     
     ## (you can comment out the line below while developing your methods)
     for k in ps:
-        post_graph(node_ls,edge_ls,motif_type,username,password,ps[k])
+        post_graph(node_ls,edge_ls,k,username,password,"p-value is: " + str(ps[k]))
 
     return ## done with main function
 
@@ -100,16 +103,16 @@ def rewire(e1,e2,edge_ls,adj_ls):
 
 def do_everything(edge_ls, adj_ls, numrandgraphs, numrewires):
     initial_counts = find_motifs(adj_ls)
-    initial_graph = (edge_ls.copy(), adj_ls.deepcopy())
+    initial_graph = (copy.copy(edge_ls), copy.deepcopy(adj_ls))
     big_counts = {}
     big_counts["SELF"] = []
     big_counts["FFL"] = []
     big_counts["FBL"] = []
 
     for i in range(numrandgraphs):
-        new_graph = initial_graph.deepcopy()
+        newgraph = copy.deepcopy(initial_graph)
         scramble_graph(newgraph[0],newgraph[1],numrewires)
-        counts = count_motifs(new_graph)
+        counts = find_motifs(newgraph[1])
         for k,v in counts.items():
             big_counts[k].append(v)
 
